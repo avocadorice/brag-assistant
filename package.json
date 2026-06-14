@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "prep": "tsx prep.ts",
+    "brag": "tsx prep.ts",
     "scrape": "tsx scrape.js",
     "notion": "tsx sync-notion.js",
     "typecheck": "tsc --noEmit"
