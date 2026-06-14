@@ -1,7 +1,13 @@
 import { GoogleGenAI } from '@google/genai';
+import type { KnowledgeEntry } from './knowledge.js';
 
-const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
+const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY! });
 const MODEL = 'gemini-2.5-pro';
+
+export interface ConversationMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
 
 const RESUME = `
 Barney Hsiao — Senior Software Engineer
@@ -12,28 +18,23 @@ Barney Hsiao — Senior Software Engineer
 Stack: Golang, TypeScript, K8s, Helm, Terraform, Istio, GCP/AWS/Azure, React/Next.js, Redis, PostgreSQL, Kafka, Elasticsearch, GraphQL, REST, gRPC
 `;
 
-function formatSources(entries) {
+function formatSources(entries: KnowledgeEntry[]): string {
   return entries.map((e, i) => {
     const label = `[${i + 1}] ${e.source.toUpperCase()}${e.title ? ` — ${e.title}` : e.question ? ` — "${e.question}"` : ''}`;
     return `${label}\n${e.text.slice(0, 800)}`;
   }).join('\n\n---\n\n');
 }
 
-async function generate(systemPrompt, userPrompt) {
+async function generate(systemPrompt: string, userPrompt: string): Promise<string> {
   const response = await ai.models.generateContent({
     model: MODEL,
     contents: userPrompt,
-    config: {
-      systemInstruction: systemPrompt,
-      maxOutputTokens: 1024,
-    },
+    config: { systemInstruction: systemPrompt, maxOutputTokens: 1024 },
   });
-  return response.text;
+  return response.text ?? '';
 }
 
-// ── Answer generation ──────────────────────────────────────────────────────────
-
-export async function generateAnswer(question, sources, level = 'Senior') {
+export async function generateAnswer(question: string, sources: KnowledgeEntry[], level = 'Senior'): Promise<string> {
   const systemPrompt = `You are helping Barney Hsiao prepare for ${level}-level software engineering behavioral interviews.
 
 BARNEY'S BACKGROUND:
@@ -43,7 +44,7 @@ RULES — CRITICAL:
 1. Only use stories and experiences from the provided sources. Do not invent or embellish details.
 2. If a source has a specific metric or outcome, use it. If not, don't make one up.
 3. Write in first person as Barney.
-4. Structure the answer using STAR (Situation, Task, Action, Result) but make it flow naturally — not like a rigid template.
+4. Structure the answer using STAR but make it flow naturally.
 5. Aim for ${level === 'Staff' ? '3-4' : '2-3'} minutes spoken length (~350-450 words).
 6. Sound confident and senior, but stay grounded in what actually happened.
 7. At the end, add a brief "Sources used:" line listing which source numbers you drew from.`;
@@ -58,9 +59,12 @@ Generate a grounded, ${level}-level answer Barney can actually use. Only use wha
   return generate(systemPrompt, userPrompt);
 }
 
-// ── Answer editing ─────────────────────────────────────────────────────────────
-
-export async function editAnswer(question, currentAnswer, editInstruction, sources) {
+export async function editAnswer(
+  question: string,
+  currentAnswer: string,
+  editInstruction: string,
+  sources: KnowledgeEntry[]
+): Promise<string> {
   const systemPrompt = `You are helping Barney Hsiao refine a behavioral interview answer.
 Only make changes the user asks for. Do not add new fabricated details — only use what's in the original answer or the provided sources.
 BARNEY'S BACKGROUND: ${RESUME}`;
@@ -80,9 +84,7 @@ Return only the updated answer, no commentary.`;
   return generate(systemPrompt, userPrompt);
 }
 
-// ── Mock interview ─────────────────────────────────────────────────────────────
-
-export async function getFollowUp(conversationHistory) {
+export async function getFollowUp(conversationHistory: ConversationMessage[]): Promise<string> {
   const prompt = `You are a Senior/Staff-level behavioral interviewer at a top tech company.
 Based on this conversation, ask one natural, probing follow-up question. Be concise — one question only.
 
@@ -91,8 +93,5 @@ ${conversationHistory.map(m => `${m.role === 'user' ? 'Interviewer' : 'Candidate
 
 Follow-up question:`;
 
-  return generate(
-    'You are a realistic technical interviewer probing for specifics and depth.',
-    prompt
-  );
+  return generate('You are a realistic technical interviewer probing for specifics and depth.', prompt);
 }

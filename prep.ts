@@ -1,24 +1,24 @@
 import 'dotenv/config';
 import readline from 'readline';
-import { loadKnowledgeBase, retrieve } from './lib/knowledge.js';
-import { generateAnswer, editAnswer, getFollowUp } from './lib/claude.js';
+import { loadKnowledgeBase, retrieve, type KnowledgeEntry } from './lib/knowledge.js';
+import { generateAnswer, editAnswer, getFollowUp, type ConversationMessage } from './lib/claude.js';
 import { addStory, listStories } from './lib/stories.js';
 import { checkSox, speakText, recordAndTranscribe } from './lib/voice.js';
 import { pickQuestion } from './lib/questions.js';
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-const ask = (q) => new Promise(res => rl.question(q, res));
+const ask = (q: string): Promise<string> => new Promise(res => rl.question(q, res));
 
-function hr() { console.log('\n' + '─'.repeat(60)); }
-function bold(s) { return `\x1b[1m${s}\x1b[0m`; }
-function dim(s) { return `\x1b[2m${s}\x1b[0m`; }
-function green(s) { return `\x1b[32m${s}\x1b[0m`; }
-function cyan(s) { return `\x1b[36m${s}\x1b[0m`; }
-function yellow(s) { return `\x1b[33m${s}\x1b[0m`; }
+const bold  = (s: string) => `\x1b[1m${s}\x1b[0m`;
+const dim   = (s: string) => `\x1b[2m${s}\x1b[0m`;
+const green = (s: string) => `\x1b[32m${s}\x1b[0m`;
+const cyan  = (s: string) => `\x1b[36m${s}\x1b[0m`;
+const yellow = (s: string) => `\x1b[33m${s}\x1b[0m`;
+const hr = () => console.log('\n' + '─'.repeat(60));
 
 // ── Answer mode ────────────────────────────────────────────────────────────────
 
-async function answerMode(kb) {
+async function answerMode(kb: KnowledgeEntry[]): Promise<void> {
   hr();
   const question = await ask(bold('Question: '));
   if (!question.trim()) return;
@@ -27,7 +27,7 @@ async function answerMode(kb) {
 
   console.log(dim('\nRetrieving relevant stories...'));
   const sources = retrieve(question, kb);
-  console.log(dim(`Found ${sources.length} relevant sources: ${sources.map(s => s.title || s.question?.slice(0, 40) || s.type).join(', ')}\n`));
+  console.log(dim(`Found ${sources.length} relevant sources: ${sources.map(s => s.title ?? s.question?.slice(0, 40) ?? s.type).join(', ')}\n`));
 
   console.log(dim('Generating answer...\n'));
   let answer = await generateAnswer(question, sources, level);
@@ -40,17 +40,15 @@ async function answerMode(kb) {
     console.log(cyan('\nOptions: [enter] to edit  |  done  |  mock (simulate follow-ups)  |  quit'));
     const input = (await ask('> ')).trim().toLowerCase();
 
-    if (input === 'done' || input === '') {
-      if (input === '') {
-        const edit = await ask('Edit instruction: ');
-        if (edit.trim()) {
-          console.log(dim('\nRevising...\n'));
-          answer = await editAnswer(question, answer, edit, sources);
-        }
-      } else {
-        console.log(green('\n✓ Answer saved for this session.\n'));
-        break;
+    if (input === '') {
+      const edit = await ask('Edit instruction: ');
+      if (edit.trim()) {
+        console.log(dim('\nRevising...\n'));
+        answer = await editAnswer(question, answer, edit, sources);
       }
+    } else if (input === 'done') {
+      console.log(green('\n✓ Answer saved for this session.\n'));
+      break;
     } else if (input === 'mock') {
       await mockMode(question, answer, sources);
       break;
@@ -65,12 +63,12 @@ async function answerMode(kb) {
 
 // ── Mock interview mode ────────────────────────────────────────────────────────
 
-async function mockMode(question, initialAnswer, sources) {
+async function mockMode(question: string, initialAnswer: string, sources: KnowledgeEntry[]): Promise<void> {
   hr();
   console.log(bold('MOCK INTERVIEW\n'));
-  console.log(dim('Interviewer asks → You answer → Interviewer follows up. Type your own answer or press Enter for AI.\n'));
+  console.log(dim('Interviewer asks → You answer → Interviewer follows up.\n'));
 
-  const history = [
+  const history: ConversationMessage[] = [
     { role: 'user', content: `Interviewer: ${question}` },
     { role: 'assistant', content: `Candidate: ${initialAnswer}` },
   ];
@@ -78,31 +76,23 @@ async function mockMode(question, initialAnswer, sources) {
   console.log(bold('Interviewer: ') + question);
   console.log('\n' + bold('You (AI): ') + initialAnswer);
 
-  let round = 0;
-  while (round < 4) {
+  for (let round = 0; round < 4; round++) {
     hr();
     console.log(dim('Getting follow-up question...'));
     const followUp = await getFollowUp(history);
     console.log('\n' + bold('Interviewer: ') + followUp);
-
     history.push({ role: 'user', content: followUp });
 
     console.log(cyan('\nYour answer (or press Enter for AI response, "done" to end):'));
     const userInput = await ask('> ');
-
     if (userInput.toLowerCase() === 'done') break;
 
-    let candidateAnswer;
-    if (userInput.trim()) {
-      candidateAnswer = userInput;
-    } else {
-      console.log(dim('\nGenerating AI response...\n'));
-      candidateAnswer = await generateAnswer(followUp, sources);
-    }
+    const candidateAnswer = userInput.trim()
+      ? userInput
+      : (console.log(dim('\nGenerating AI response...\n')), await generateAnswer(followUp, sources));
 
     console.log('\n' + bold('You: ') + candidateAnswer);
     history.push({ role: 'assistant', content: candidateAnswer });
-    round++;
   }
 
   hr();
@@ -111,75 +101,54 @@ async function mockMode(question, initialAnswer, sources) {
 
 // ── Practice mode ──────────────────────────────────────────────────────────────
 
-async function practiceMode(kb, useVoice) {
+async function practiceMode(kb: KnowledgeEntry[], useVoice: boolean): Promise<void> {
   hr();
-
-  // Pick question
   const question = pickQuestion(kb);
   const sources = retrieve(question, kb);
 
   console.log(bold('\nINTERVIEWER:\n'));
   console.log(cyan(question) + '\n');
-
   if (useVoice) speakText(question);
 
-  // Get initial answer
-  let answer = await getAnswer(useVoice, 'Your answer');
+  const answer = await getAnswer(useVoice, 'Your answer');
   if (!answer) return;
+  if (useVoice) { hr(); console.log(bold('You said:\n') + answer + '\n'); }
 
-  if (useVoice) {
-    hr();
-    console.log(bold('You said:\n'));
-    console.log(answer + '\n');
-  }
-
-  // Follow-up loop
-  const history = [
+  const history: ConversationMessage[] = [
     { role: 'user', content: question },
     { role: 'assistant', content: answer },
   ];
 
-  let round = 0;
-  while (round < 3) {
+  for (let round = 0; round < 3; round++) {
     hr();
     console.log(dim('Generating follow-up...'));
     const followUp = await getFollowUp(history);
-
     console.log('\n' + bold('FOLLOW-UP:\n'));
     console.log(yellow(followUp) + '\n');
     if (useVoice) speakText(followUp);
 
     const followUpAnswer = await getAnswer(useVoice, 'Your answer (or type "done" to finish)');
     if (!followUpAnswer || followUpAnswer.toLowerCase() === 'done') break;
-
-    if (useVoice) {
-      hr();
-      console.log(bold('You said:\n'));
-      console.log(followUpAnswer + '\n');
-    }
+    if (useVoice) { hr(); console.log(bold('You said:\n') + followUpAnswer + '\n'); }
 
     history.push({ role: 'user', content: followUp });
     history.push({ role: 'assistant', content: followUpAnswer });
-    round++;
   }
 
   hr();
   console.log(green('Practice session done.\n'));
-  console.log(dim('Tip: Run "npm run prep" again and pick option 1 to generate a polished answer for this question.\n'));
+  console.log(dim('Tip: pick option 1 from the menu to generate a polished answer for this question.\n'));
 }
 
-async function getAnswer(useVoice, prompt) {
-  if (useVoice) {
-    const transcript = await recordAndTranscribe(ask);
-    return transcript;
-  }
+async function getAnswer(useVoice: boolean, prompt: string): Promise<string | null> {
+  if (useVoice) return recordAndTranscribe(ask);
   return ask(`${prompt}: `);
 }
 
 // ── Main menu ──────────────────────────────────────────────────────────────────
 
-async function main() {
-  console.log(bold('\n  Interview Prep Assistant'));
+async function main(): Promise<void> {
+  console.log(bold('\n  RAG Assistant'));
   console.log(dim('  Loading knowledge base...\n'));
 
   const kb = await loadKnowledgeBase();
@@ -205,7 +174,7 @@ async function main() {
       if (hasSox) {
         const mode = (await ask(dim('Mode? [voice/text] (default: text): '))).trim().toLowerCase();
         useVoice = mode === 'voice' || mode === 'v';
-      } else if (choice === '2') {
+      } else {
         console.log(dim('  (Voice mode requires sox — install with: brew install sox)\n'));
       }
       await practiceMode(kb, useVoice);
@@ -224,4 +193,4 @@ async function main() {
   }
 }
 
-main().catch(err => { console.error('Fatal:', err.message); process.exit(1); });
+main().catch(err => { console.error('Fatal:', (err as Error).message); process.exit(1); });

@@ -1,11 +1,12 @@
 {
-  "name": "interviewprep",
+  "name": "ragassistant",
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "prep": "node prep.js",
-    "scrape": "node scrape.js",
-    "notion": "node sync-notion.js"
+    "prep": "tsx prep.ts",
+    "scrape": "tsx scrape.js",
+    "notion": "tsx sync-notion.js",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.1",
@@ -14,5 +15,10 @@
     "dotenv": "^17.4.2",
     "mammoth": "^1.12.0",
     "playwright": "^1.44.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.3",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
   }
 }

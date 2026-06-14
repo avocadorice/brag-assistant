@@ -1,4 +1,6 @@
-export const QUESTION_BANK = [
+import type { KnowledgeEntry } from './knowledge.js';
+
+export const QUESTION_BANK: string[] = [
   // Ownership / impact
   "Tell me about the most technically complex problem you've solved.",
   "Describe a system you designed or owned end-to-end.",
@@ -33,10 +35,10 @@ export const QUESTION_BANK = [
   "Give me an example of a time you got a team aligned around a difficult technical decision.",
 ];
 
-export function pickQuestion(kb) {
+export function pickQuestion(kb: KnowledgeEntry[]): string {
   const hiQuestions = kb
     .filter(e => e.source === 'hellointerview' && e.question)
-    .map(e => e.question);
+    .map(e => e.question as string);
 
   const pool = [...hiQuestions, ...QUESTION_BANK];
   return pool[Math.floor(Math.random() * pool.length)];
