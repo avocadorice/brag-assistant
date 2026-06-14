@@ -1,0 +1,14 @@
+node_modules/
+
+# Personal data — not committed to public repo
+.env
+output.json
+notion-output.json
+story-bank.json
+side-projects.json
+from-gdrive/
+resume_barneyhsiao.pdf
+page-debug.json
+*.csv
+*.wav
+*.m4a

@@ -1,0 +1,18 @@
+{
+  "name": "interviewprep",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "prep": "node prep.js",
+    "scrape": "node scrape.js",
+    "notion": "node sync-notion.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.104.1",
+    "@google/genai": "^2.8.0",
+    "csv-parse": "^6.2.1",
+    "dotenv": "^17.4.2",
+    "mammoth": "^1.12.0",
+    "playwright": "^1.44.0"
+  }
+}
