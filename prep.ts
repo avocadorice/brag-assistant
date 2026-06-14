@@ -2,7 +2,8 @@ import readline from 'node:readline';
 import { loadKnowledgeBase, retrieve, type KnowledgeEntry } from './lib/knowledge.js';
 import { generateAnswer, editAnswer, getFollowUp, type ConversationMessage } from './lib/claude.js';
 import { addStory, listStories } from './lib/stories.js';
-import { checkSox, speakText, recordAndTranscribe } from './lib/voice.js';
+import { checkSox, speakText, recordAndTranscribe, recordWithCoaching } from './lib/voice.js';
+import { coachAnswer } from './lib/coach.js';
 import { pickQuestion } from './lib/questions.js';
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -107,41 +108,100 @@ async function practiceMode(kb: KnowledgeEntry[], useVoice: boolean): Promise<vo
 
   console.log(bold('\nINTERVIEWER:\n'));
   console.log(cyan(question) + '\n');
-  if (useVoice) speakText(question);
+  speakText(question);
 
-  const answer = await getAnswer(useVoice, 'Your answer');
-  if (!answer) return;
-  if (useVoice) { hr(); console.log(bold('You said:\n') + answer + '\n'); }
+  if (useVoice) {
+    await voicePracticeRound(question, sources);
+  } else {
+    await textPracticeRound(question, sources);
+  }
+}
 
-  const history: ConversationMessage[] = [
-    { role: 'user', content: question },
-    { role: 'assistant', content: answer },
-  ];
+async function voicePracticeRound(question: string, sources: KnowledgeEntry[]): Promise<void> {
+  // Record with real-time rambling detection
+  const { transcript, wasInterrupted, interruptMessage } = await recordWithCoaching(question, rl);
 
-  for (let round = 0; round < 3; round++) {
+  if (!transcript) { console.log(dim('No audio captured.\n')); return; }
+
+  hr();
+  console.log(bold('YOU SAID:\n'));
+  console.log(dim(transcript) + '\n');
+
+  if (wasInterrupted && interruptMessage) {
+    console.log('\x1b[33m⚡ INTERRUPTED: ' + interruptMessage + '\x1b[0m\n');
+  }
+
+  // Coach analysis
+  console.log(dim('Analyzing...\n'));
+  const feedback = await coachAnswer(question, transcript, wasInterrupted);
+
+  hr();
+  console.log(bold('COACH FEEDBACK:\n'));
+  console.log(green('✓ What landed:\n') + feedback.landed + '\n');
+  console.log('\x1b[31m✗ What to cut:\x1b[0m\n' + feedback.cut + '\n');
+  console.log(cyan('→ What to say instead:\n') + feedback.instead + '\n');
+
+  // Options
+  hr();
+  console.log(dim('Options:  ideal  |  followup  |  retry  |  done'));
+  const choice = (await ask('> ')).trim().toLowerCase();
+
+  if (choice === 'ideal') {
+    console.log(dim('\nGenerating ideal answer...\n'));
+    const ideal = await generateAnswer(question, sources);
     hr();
-    console.log(dim('Generating follow-up...'));
-    const followUp = await getFollowUp(history);
-    console.log('\n' + bold('FOLLOW-UP:\n'));
-    console.log(yellow(followUp) + '\n');
-    if (useVoice) speakText(followUp);
-
-    const followUpAnswer = await getAnswer(useVoice, 'Your answer (or type "done" to finish)');
-    if (!followUpAnswer || followUpAnswer.toLowerCase() === 'done') break;
-    if (useVoice) { hr(); console.log(bold('You said:\n') + followUpAnswer + '\n'); }
-
-    history.push({ role: 'user', content: followUp });
-    history.push({ role: 'assistant', content: followUpAnswer });
+    console.log(bold('IDEAL ANSWER:\n') + ideal + '\n');
+    speakText(ideal);
+    await ask(dim('Press Enter to continue...'));
+  } else if (choice === 'followup') {
+    const followUp = await getFollowUp([
+      { role: 'user', content: question },
+      { role: 'assistant', content: transcript },
+    ]);
+    console.log('\n' + bold('FOLLOW-UP: ') + yellow(followUp) + '\n');
+    speakText(followUp);
+    await voicePracticeRound(followUp, sources);
+    return;
+  } else if (choice === 'retry') {
+    console.log(dim('\nTake two.\n'));
+    await voicePracticeRound(question, sources);
+    return;
   }
 
   hr();
-  console.log(green('Practice session done.\n'));
-  console.log(dim('Tip: pick option 1 from the menu to generate a polished answer for this question.\n'));
+  console.log(green('Session done.\n'));
 }
 
-async function getAnswer(useVoice: boolean, prompt: string): Promise<string | null> {
-  if (useVoice) return recordAndTranscribe(ask);
-  return ask(`${prompt}: `);
+async function textPracticeRound(question: string, sources: KnowledgeEntry[]): Promise<void> {
+  const answer = await ask('Your answer: ');
+  if (!answer.trim()) return;
+
+  console.log(dim('\nAnalyzing...\n'));
+  const feedback = await coachAnswer(question, answer, false);
+
+  hr();
+  console.log(bold('COACH FEEDBACK:\n'));
+  console.log(green('✓ What landed:\n') + feedback.landed + '\n');
+  console.log('\x1b[31m✗ What to cut:\x1b[0m\n' + feedback.cut + '\n');
+  console.log(cyan('→ What to say instead:\n') + feedback.instead + '\n');
+
+  hr();
+  console.log(dim('Options:  ideal  |  followup  |  retry  |  done'));
+  const choice = (await ask('> ')).trim().toLowerCase();
+
+  if (choice === 'ideal') {
+    console.log(dim('\nGenerating ideal answer...\n'));
+    console.log(bold('IDEAL ANSWER:\n') + await generateAnswer(question, sources) + '\n');
+  } else if (choice === 'followup') {
+    const followUp = await getFollowUp([
+      { role: 'user', content: question },
+      { role: 'assistant', content: answer },
+    ]);
+    console.log('\n' + bold('FOLLOW-UP: ') + yellow(followUp) + '\n');
+    await textPracticeRound(followUp, sources);
+  } else if (choice === 'retry') {
+    await textPracticeRound(question, sources);
+  }
 }
 
 // ── Main menu ──────────────────────────────────────────────────────────────────
