@@ -1,5 +1,4 @@
-import 'dotenv/config';
-import readline from 'readline';
+import readline from 'node:readline';
 import { loadKnowledgeBase, retrieve, type KnowledgeEntry } from './lib/knowledge.js';
 import { generateAnswer, editAnswer, getFollowUp, type ConversationMessage } from './lib/claude.js';
 import { addStory, listStories } from './lib/stories.js';

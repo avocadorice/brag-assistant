@@ -1,0 +1,8 @@
+{
+  "nodeModulesDir": "auto",
+  "tasks": {
+    "prep":   "deno run --env-file=.env --allow-read --allow-write --allow-net --allow-env --allow-run prep.ts",
+    "scrape": "deno run --env-file=.env --allow-read --allow-write --allow-net --allow-env --allow-run scrape.js",
+    "notion": "deno run --env-file=.env --allow-read --allow-write --allow-net --allow-env --allow-run sync-notion.js"
+  }
+}

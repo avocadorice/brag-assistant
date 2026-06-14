@@ -1,5 +1,5 @@
-import { spawn, execSync } from 'child_process';
-import fs from 'fs';
+import { spawn, execSync } from 'node:child_process';
+import fs from 'node:fs';
 import { GoogleGenAI } from '@google/genai';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY! });

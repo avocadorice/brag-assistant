@@ -1,7 +1,7 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import type { Interface as ReadlineInterface } from 'readline';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import type { Interface as ReadlineInterface } from 'node:readline';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const STORY_BANK = path.join(__dirname, '..', 'story-bank.json');
