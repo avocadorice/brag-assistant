@@ -1,5 +1,4 @@
 import { GoogleGenAI } from '@google/genai';
-import type { KnowledgeEntry } from './knowledge.js';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY! });
 
@@ -14,7 +13,7 @@ export interface CoachFeedback {
   instead: string;
 }
 
-// Called every ~25s on a snapshot transcript to decide whether to interrupt
+// Called every ~25s on a snapshot transcript — use flash for speed
 export async function analyzeForRambling(
   question: string,
   transcript: string
@@ -46,14 +45,13 @@ Respond with JSON only, no markdown:
   }
 }
 
-// Full post-answer coaching: what landed, what to cut, what to say instead
 export async function coachAnswer(
   question: string,
   transcript: string,
   wasInterrupted: boolean
 ): Promise<CoachFeedback> {
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-pro',
+    model: 'gemini-2.0-flash',
     contents: `You are a brutally honest but supportive interview coach.
 
 Question: "${question}"
@@ -72,11 +70,11 @@ INSTEAD: The tighter version of what they were trying to say — 2-3 sentences m
   });
 
   const text = response.text ?? '';
-  const landed  = extract(text, 'LANDED');
-  const cut     = extract(text, 'CUT');
-  const instead = extract(text, 'INSTEAD');
-
-  return { landed, cut, instead };
+  return {
+    landed:  extract(text, 'LANDED'),
+    cut:     extract(text, 'CUT'),
+    instead: extract(text, 'INSTEAD'),
+  };
 }
 
 function extract(text: string, section: string): string {

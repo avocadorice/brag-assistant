@@ -65,4 +65,33 @@ export function listStories(): void {
     console.log(`  ${i + 1}. ${s.title}`);
     console.log(`     ${s.text.slice(0, 80)}...\n`);
   });
+  console.log('  Enter a number to read the full story, or press Enter to go back.');
+}
+
+export function getStory(index: number): Story | undefined {
+  const { stories } = load();
+  return stories[index];
+}
+
+export function updateStory(index: number, updates: { title?: string; text?: string }): boolean {
+  const bank = load();
+  const story = bank.stories[index];
+  if (!story) return false;
+  if (updates.title) story.title = updates.title;
+  if (updates.text)  story.text  = updates.text;
+  save(bank);
+  return true;
+}
+
+export function searchStories(query: string): Array<Story & { index: number }> {
+  const { stories } = load();
+  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  return stories
+    .map((s, index) => {
+      const haystack = (s.title + ' ' + s.text).toLowerCase();
+      const score = terms.filter(t => haystack.includes(t)).length;
+      return { ...s, index, score };
+    })
+    .filter(s => s.score > 0)
+    .sort((a, b) => b.score - a.score);
 }

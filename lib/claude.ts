@@ -2,7 +2,7 @@ import { GoogleGenAI } from '@google/genai';
 import type { KnowledgeEntry } from './knowledge.js';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY! });
-const MODEL = 'gemini-2.5-pro';
+const MODEL = 'gemini-2.0-flash';
 
 export interface ConversationMessage {
   role: 'user' | 'assistant';
@@ -25,11 +25,11 @@ function formatSources(entries: KnowledgeEntry[]): string {
   }).join('\n\n---\n\n');
 }
 
-async function generate(systemPrompt: string, userPrompt: string): Promise<string> {
+async function generate(systemPrompt: string, userPrompt: string, maxTokens = 1024): Promise<string> {
   const response = await ai.models.generateContent({
     model: MODEL,
     contents: userPrompt,
-    config: { systemInstruction: systemPrompt, maxOutputTokens: 1024 },
+    config: { systemInstruction: systemPrompt, maxOutputTokens: maxTokens },
   });
   return response.text ?? '';
 }
@@ -56,7 +56,7 @@ ${formatSources(sources)}
 
 Generate a grounded, ${level}-level answer Barney can actually use. Only use what's in the sources above.`;
 
-  return generate(systemPrompt, userPrompt);
+  return generate(systemPrompt, userPrompt, 1024);
 }
 
 export async function editAnswer(
@@ -81,7 +81,7 @@ EDIT REQUEST: ${editInstruction}
 
 Return only the updated answer, no commentary.`;
 
-  return generate(systemPrompt, userPrompt);
+  return generate(systemPrompt, userPrompt, 1024);
 }
 
 export async function getFollowUp(conversationHistory: ConversationMessage[]): Promise<string> {
@@ -93,5 +93,38 @@ ${conversationHistory.map(m => `${m.role === 'user' ? 'Interviewer' : 'Candidate
 
 Follow-up question:`;
 
-  return generate('You are a realistic technical interviewer probing for specifics and depth.', prompt);
+  return generate('You are a realistic technical interviewer probing for specifics and depth.', prompt, 256);
+}
+
+export async function getRecruiterFollowUp(
+  conversationHistory: ConversationMessage[],
+  company: string
+): Promise<string> {
+  const prompt = `You are a Principal Recruiter at ${company} doing an initial screening call with a senior backend engineer.
+Ask one short, natural follow-up question based on what the candidate just said. Keep it conversational — not technical.
+
+Conversation:
+${conversationHistory.map(m => `${m.role === 'user' ? 'Recruiter' : 'Candidate'}: ${m.content}`).join('\n\n')}
+
+Follow-up question:`;
+
+  return generate('You are a realistic recruiter asking short, conversational follow-up questions — not a technical interviewer.', prompt, 256);
+}
+
+export async function amendStoryText(existingText: string, userNotes: string): Promise<string> {
+  const systemPrompt = `You are helping Barney Hsiao update a story in his behavioral interview prep bank.
+These stories are spoken answers (STAR format, first person, ~2-3 min).
+You will receive the existing story and Barney's rough notes about what to add, change, or cut.
+Revise the story to incorporate the notes — keep what's already good, fix what the notes call out.
+Do not invent new facts. Return only the revised story, no commentary.`;
+
+  const userPrompt = `EXISTING STORY:
+${existingText}
+
+AMENDMENT NOTES:
+${userNotes}
+
+Revise the story to incorporate these notes. Keep the STAR structure and first-person voice.`;
+
+  return generate(systemPrompt, userPrompt, 1024);
 }
